@@ -478,6 +478,21 @@ struct gsm_encr {
  */
 #define ts_for_each_lchan(lchan, ts) ts_as_pchan_for_each_lchan(lchan, ts, (ts)->pchan_is)
 
+/* Iterate over all possible lchans available that have an FSM allocated based
+ * on PCHAN \ref ts (dynamic) configuration.
+ * List of \ref lchan iterated through this loop is different than \ref
+ * ts_for_each_lchan only if \ref ts is configured as a dynamic timeslot. In
+ * this case, instead of using the currently set mode (among all
+ * possible in the dynamic group) the number of \ref lchan iterated is that of
+ * the channel mode in the dynamic mode group which supports the maximum amount
+ * of \ref lchan.
+ * This is useful in case dynamic timeslot \ref ts is in process of switching from
+ * configuration PDCH (no lchans) to TCH_F (1 lchan), where pchan_is is still
+ * set to PDCH but \ref ts may contain already an \ref lchan of type TCH_F which
+ * initiated the request to switch the \ts configuration.
+ */
+#define ts_for_each_lchan_slot(lchan, ts) ts_as_pchan_for_each_lchan(lchan, ts, (ts)->pchan_on_init)
+
 enum lchan_activate_mode {
 	FOR_NONE,
 	FOR_MS_CHANNEL_REQUEST,
