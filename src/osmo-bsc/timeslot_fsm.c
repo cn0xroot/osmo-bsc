@@ -171,9 +171,10 @@ static void ts_fsm_error(struct osmo_fsm_inst *fi, uint32_t state_chg, const cha
 	if (errmsg)
 		LOG_TS(ts, LOGL_ERROR, "%s\n", errmsg);
 
-	ts_lchans_dispatch(ts, LCHAN_ST_WAIT_TS_READY, LCHAN_EV_TS_ERROR);
 	if (fi->state != state_chg)
 		osmo_fsm_inst_state_chg(fi, state_chg, 0, 0);
+
+	ts_lchans_dispatch(ts, LCHAN_ST_WAIT_TS_READY, LCHAN_EV_TS_ERROR);
 }
 
 static void ts_fsm_err_ready_to_go_in_pdch(struct osmo_fsm_inst *fi, struct gsm_lchan *lchan)
