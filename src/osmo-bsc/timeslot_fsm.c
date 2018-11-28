@@ -857,7 +857,7 @@ static struct osmo_fsm ts_fsm = {
 bool ts_is_lchan_waiting_for_pchan(struct gsm_bts_trx_ts *ts, enum gsm_phys_chan_config *target_pchan)
 {
 	struct gsm_lchan *lchan;
-	ts_for_each_lchan(lchan, ts) {
+	ts_for_each_lchan_slot(lchan, ts) {
 		if (lchan->fi->state == LCHAN_ST_WAIT_TS_READY) {
 			if (target_pchan)
 				*target_pchan = gsm_pchan_by_lchan_type(lchan->type);
@@ -887,17 +887,11 @@ bool ts_is_pchan_switching(struct gsm_bts_trx_ts *ts, enum gsm_phys_chan_config 
 
 	switch (ts->fi->state) {
 	case TS_ST_WAIT_PDCH_ACT:
+		/* If we were switching to PDCH, there's no PDCH lchan managed
+		 * in BSC, So we need to set it manually. */
 		if (target_pchan)
 			*target_pchan = GSM_PCHAN_PDCH;
 		return true;
-
-	case TS_ST_WAIT_PDCH_DEACT:
-		/* If we were switching to a specific pchan kind, an lchan would be waiting. So this must
-		 * be NONE then. */
-		if (target_pchan)
-			*target_pchan = GSM_PCHAN_NONE;
-		return true;
-
 	default:
 		return false;
 	}
