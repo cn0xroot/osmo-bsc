@@ -144,7 +144,7 @@ static int ts_lchans_waiting(struct gsm_bts_trx_ts *ts)
 {
 	struct gsm_lchan *lchan;
 	int count = 0;
-	ts_for_each_lchan(lchan, ts)
+	ts_for_each_lchan_slot(lchan, ts)
 		if (lchan->fi->state == LCHAN_ST_WAIT_TS_READY)
 			count++;
 	return count;
