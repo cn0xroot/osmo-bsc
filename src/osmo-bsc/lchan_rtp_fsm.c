@@ -22,13 +22,16 @@
 
 #include <osmocom/core/fsm.h>
 
+#include <osmocom/mgcp_client/mgcp_client_fsm.h>
+#include <osmocom/mgcp_client/mgcp_client_endpoint_fsm.h>
+
 #include <osmocom/bsc/gsm_data.h>
 #include <osmocom/bsc/lchan_fsm.h>
 #include <osmocom/bsc/lchan_rtp_fsm.h>
-#include <osmocom/bsc/mgw_endpoint_fsm.h>
-#include <osmocom/bsc/bsc_subscr_conn_fsm.h>
 #include <osmocom/bsc/abis_rsl.h>
 #include <osmocom/bsc/bsc_msc_data.h>
+#include <osmocom/bsc/bsc_subscr_conn_fsm.h>
+#include <osmocom/bsc/codec_pref.h>
 
 static struct osmo_fsm lchan_rtp_fsm;
 
@@ -120,7 +123,7 @@ void lchan_rtp_fsm_start(struct gsm_lchan *lchan)
 /* While activating an lchan, for example for Handover, we may want to re-use another lchan's MGW
  * endpoint CI. If Handover fails half way, the old lchan must keep its MGW endpoint CI, and we must not
  * clean it up. Hence keep another lchan's mgw_endpoint_ci_bts out of lchan until all is done. */
-struct mgwep_ci *lchan_use_mgw_endpoint_ci_bts(struct gsm_lchan *lchan)
+struct osmo_mgcpc_ep_ci *lchan_use_mgw_endpoint_ci_bts(struct gsm_lchan *lchan)
 {
 	if (lchan->mgw_endpoint_ci_bts)
 		return lchan->mgw_endpoint_ci_bts;
@@ -135,24 +138,24 @@ static void lchan_rtp_fsm_wait_mgw_endpoint_available_onenter(struct osmo_fsm_in
 							      uint32_t prev_state)
 {
 	struct gsm_lchan *lchan = lchan_rtp_fi_lchan(fi);
-	struct mgw_endpoint *mgwep;
-	struct mgwep_ci *use_mgwep_ci = lchan_use_mgw_endpoint_ci_bts(lchan);
+	struct osmo_mgcpc_ep *ep;
+	struct osmo_mgcpc_ep_ci *use_ci = lchan_use_mgw_endpoint_ci_bts(lchan);
 	struct mgcp_conn_peer crcx_info = {};
 
-	if (use_mgwep_ci) {
+	if (use_ci) {
 		LOG_LCHAN_RTP(lchan, LOGL_DEBUG, "MGW endpoint already available: %s\n",
-			      mgwep_ci_name(use_mgwep_ci));
+			      osmo_mgcpc_ep_ci_name(use_ci));
 		lchan_rtp_fsm_state_chg(LCHAN_RTP_ST_WAIT_LCHAN_READY);
 		return;
 	}
 
-	mgwep = gscon_ensure_mgw_endpoint(lchan->conn, lchan->activate.info.msc_assigned_cic);
-	if (!mgwep) {
+	ep = gscon_ensure_mgw_endpoint(lchan->conn, lchan->activate.info.msc_assigned_cic);
+	if (!ep) {
 		lchan_rtp_fail("Internal error: cannot obtain MGW endpoint handle for conn");
 		return;
 	}
 
-	lchan->mgw_endpoint_ci_bts = mgw_endpoint_ci_add(mgwep, "to-BTS");
+	lchan->mgw_endpoint_ci_bts = osmo_mgcpc_ep_ci_add(ep, "to-BTS");
 
 	if (lchan->conn) {
 		crcx_info.call_id = lchan->conn->sccp.conn_id;
@@ -162,7 +165,7 @@ static void lchan_rtp_fsm_wait_mgw_endpoint_available_onenter(struct osmo_fsm_in
 	crcx_info.ptime = 20;
 	mgcp_pick_codec(&crcx_info, lchan, true);
 
-	mgw_endpoint_ci_request(lchan->mgw_endpoint_ci_bts, MGCP_VERB_CRCX, &crcx_info,
+	osmo_mgcpc_ep_ci_request(lchan->mgw_endpoint_ci_bts, MGCP_VERB_CRCX, &crcx_info,
 				fi, LCHAN_RTP_EV_MGW_ENDPOINT_AVAILABLE, LCHAN_RTP_EV_MGW_ENDPOINT_ERROR,
 				0);
 }
@@ -174,7 +177,7 @@ static void lchan_rtp_fsm_wait_mgw_endpoint_available(struct osmo_fsm_inst *fi, 
 
 	case LCHAN_RTP_EV_MGW_ENDPOINT_AVAILABLE:
 		LOG_LCHAN_RTP(lchan, LOGL_DEBUG, "MGW endpoint: %s\n",
-			      mgwep_ci_name(lchan_use_mgw_endpoint_ci_bts(lchan)));
+			      osmo_mgcpc_ep_ci_name(lchan_use_mgw_endpoint_ci_bts(lchan)));
 		lchan_rtp_fsm_state_chg(LCHAN_RTP_ST_WAIT_LCHAN_READY);
 		return;
 
@@ -328,7 +331,7 @@ static void lchan_rtp_fsm_wait_ipacc_mdcx_ack_onenter(struct osmo_fsm_inst *fi, 
 		return;
 	}
 
-	mgw_rtp = mgwep_ci_get_rtp_info(lchan_use_mgw_endpoint_ci_bts(lchan));
+	mgw_rtp = osmo_mgcpc_ep_ci_get_rtp_info(lchan_use_mgw_endpoint_ci_bts(lchan));
 
 	if (!mgw_rtp) {
 		lchan_rtp_fail("Cannot send IPACC MDCX to BTS:"
@@ -396,7 +399,7 @@ static void lchan_rtp_fsm_wait_ready_to_switch_rtp(struct osmo_fsm_inst *fi, uin
 }
 
 static void connect_mgw_endpoint_to_lchan(struct osmo_fsm_inst *fi,
-					  struct mgwep_ci *ci,
+					  struct osmo_mgcpc_ep_ci *ci,
 					  struct gsm_lchan *to_lchan)
 {
 	int rc;
@@ -426,8 +429,8 @@ static void connect_mgw_endpoint_to_lchan(struct osmo_fsm_inst *fi,
 	}
 
 	LOG_LCHAN_RTP(lchan, LOGL_DEBUG, "Sending BTS side RTP port info %s:%u to MGW %s\n",
-		      mdcx_info.addr, mdcx_info.port, mgwep_ci_name(ci));
-	mgw_endpoint_ci_request(ci, MGCP_VERB_MDCX, &mdcx_info,
+		      mdcx_info.addr, mdcx_info.port, osmo_mgcpc_ep_ci_name(ci));
+	osmo_mgcpc_ep_ci_request(ci, MGCP_VERB_MDCX, &mdcx_info,
 				fi, LCHAN_RTP_EV_MGW_ENDPOINT_CONFIGURED,
 				LCHAN_RTP_EV_MGW_ENDPOINT_ERROR, 0);
 }
@@ -539,7 +542,7 @@ static void lchan_rtp_fsm_rollback(struct osmo_fsm_inst *fi, uint32_t event, voi
 		LOG_LCHAN_RTP(lchan, LOGL_ERROR,
 			      "Error while connecting the MGW back to the old lchan's RTP port:"
 			      " %s %s\n",
-			      mgwep_ci_name(lchan->mgw_endpoint_ci_bts),
+			      osmo_mgcpc_ep_ci_name(lchan->mgw_endpoint_ci_bts),
 			      gsm_lchan_name(old_lchan));
 		osmo_fsm_inst_term(fi, OSMO_FSM_TERM_ERROR, 0);
 		return;
@@ -575,7 +578,7 @@ static void lchan_rtp_fsm_established(struct osmo_fsm_inst *fi, uint32_t event, 
 	case LCHAN_RTP_EV_IPACC_MDCX_ACK:
 		LOG_LCHAN_RTP(lchan, LOGL_NOTICE,
 			      "Received MDCX ACK on established lchan's RTP port: %s\n",
-			      mgwep_ci_name(lchan->mgw_endpoint_ci_bts));
+			      osmo_mgcpc_ep_ci_name(lchan->mgw_endpoint_ci_bts));
 		return;
 	default:
 		OSMO_ASSERT(false);
@@ -740,7 +743,7 @@ void lchan_rtp_fsm_cleanup(struct osmo_fsm_inst *fi, enum osmo_fsm_term_cause ca
 {
 	struct gsm_lchan *lchan = lchan_rtp_fi_lchan(fi);
 	if (lchan->mgw_endpoint_ci_bts) {
-		mgw_endpoint_ci_dlcx(lchan->mgw_endpoint_ci_bts);
+		osmo_mgcpc_ep_ci_dlcx(lchan->mgw_endpoint_ci_bts);
 		lchan->mgw_endpoint_ci_bts = NULL;
 	}
 	lchan->fi_rtp = NULL;
@@ -752,7 +755,7 @@ void lchan_rtp_fsm_cleanup(struct osmo_fsm_inst *fi, enum osmo_fsm_term_cause ca
 		osmo_fsm_inst_dispatch(lchan->fi, LCHAN_EV_RTP_RELEASED, 0);
 }
 
-/* The mgw_endpoint was invalidated, just and simply forget the pointer without cleanup. */
+/* The MGW endpoint was invalidated, just and simply forget the pointer without cleanup. */
 void lchan_forget_mgw_endpoint(struct gsm_lchan *lchan)
 {
 	if (!lchan)

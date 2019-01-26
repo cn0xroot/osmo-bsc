@@ -33,7 +33,6 @@
 #include <osmocom/bsc/handover_decision_2.h>
 #include <osmocom/bsc/timeslot_fsm.h>
 #include <osmocom/bsc/lchan_fsm.h>
-#include <osmocom/bsc/mgw_endpoint_fsm.h>
 #include <osmocom/bsc/bsc_subscr_conn_fsm.h>
 #include <osmocom/bsc/bsc_subscriber.h>
 #include <osmocom/bsc/assignment_fsm.h>
@@ -63,6 +62,7 @@
 #include <osmocom/bsc/codec_pref.h>
 
 #include <osmocom/mgcp_client/mgcp_client.h>
+#include <osmocom/mgcp_client/mgcp_client_endpoint_fsm.h>
 
 #include <osmocom/sigtran/xua_msg.h>
 
@@ -849,7 +849,7 @@ int main(int argc, char **argv)
 	lchan_fsm_init();
 	bsc_subscr_conn_fsm_init();
 	assignment_fsm_init();
-	mgw_endpoint_fsm_init(bsc_gsmnet->T_defs);
+	osmo_mgcpc_ep_fsm_init(bsc_gsmnet->T_defs);
 	handover_fsm_init();
 
 	/* Read the config */

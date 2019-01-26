@@ -22,9 +22,13 @@
 #include <osmocom/core/msgb.h>
 #include <osmocom/gsm/protocol/gsm_08_08.h>
 #include <osmocom/gsm/gsm0808_utils.h>
+#include <osmocom/netif/rtp.h>
+#include <osmocom/mgcp_client/mgcp_client.h>
+#include <osmocom/mgcp_client/mgcp_client_fsm.h>
 #include <osmocom/bsc/bsc_msc_data.h>
 #include <osmocom/bsc/codec_pref.h>
 #include <osmocom/bsc/gsm_data.h>
+#include <osmocom/bsc/lchan_fsm.h>
 
 /* Determine whether a permitted speech value is specifies a half rate or full
  * rate codec */
@@ -467,4 +471,69 @@ int check_codec_pref(struct llist_head *mscs)
 	}
 
 	return rc;
+}
+
+/* Depending on the channel mode and rate, return the codec type that is signalled towards the MGW. */
+enum mgcp_codecs chan_mode_to_mgcp_codec(enum gsm48_chan_mode chan_mode, bool full_rate)
+{
+	switch (chan_mode) {
+	case GSM48_CMODE_SPEECH_V1:
+		if (full_rate)
+			return CODEC_GSM_8000_1;
+		return CODEC_GSMHR_8000_1;
+
+	case GSM48_CMODE_SPEECH_EFR:
+		return CODEC_GSMEFR_8000_1;
+
+	case GSM48_CMODE_SPEECH_AMR:
+		return CODEC_AMR_8000_1;
+
+	default:
+		return -1;
+	}
+}
+
+static int mgcp_codec_to_bss_pt(enum mgcp_codecs codec)
+{
+	switch (codec) {
+	case CODEC_GSMHR_8000_1:
+		return RTP_PT_GSM_HALF;
+
+	case CODEC_GSMEFR_8000_1:
+		return RTP_PT_GSM_EFR;
+
+	case CODEC_AMR_8000_1:
+		return RTP_PT_AMR;
+
+	default:
+		/* Not an error, we just leave it to libosmo-mgcp-client to
+		 * decide over the PT. */
+		return -1;
+	}
+}
+
+void mgcp_pick_codec(struct mgcp_conn_peer *verb_info, const struct gsm_lchan *lchan, bool bss_side)
+{
+	enum mgcp_codecs codec = chan_mode_to_mgcp_codec(lchan->tch_mode,
+							 lchan->type == GSM_LCHAN_TCH_H? false : true);
+	int custom_pt;
+
+	if (codec < 0) {
+		LOG_LCHAN(lchan, LOGL_ERROR,
+			  "Unable to determine MGCP codec type for %s in chan-mode %s\n",
+			  gsm_lchant_name(lchan->type), gsm48_chan_mode_name(lchan->tch_mode));
+		verb_info->codecs_len = 0;
+		return;
+	}
+
+	verb_info->codecs[0] = codec;
+	verb_info->codecs_len = 1;
+
+	/* Setup custom payload types (only for BSS side and when required) */
+	custom_pt = mgcp_codec_to_bss_pt(codec);
+	if (bss_side && custom_pt > 0) {
+		verb_info->ptmap[0].codec = codec;
+	        verb_info->ptmap[0].pt = custom_pt;
+	        verb_info->ptmap_len = 1;
+	}
 }

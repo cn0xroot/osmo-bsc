@@ -23,11 +23,12 @@
 #include <osmocom/gsm/rsl.h>
 #include <osmocom/core/byteswap.h>
 
+#include <osmocom/mgcp_client/mgcp_client_endpoint_fsm.h>
+
 #include <osmocom/bsc/debug.h>
 #include <osmocom/bsc/lchan_fsm.h>
 #include <osmocom/bsc/lchan_rtp_fsm.h>
 #include <osmocom/bsc/timeslot_fsm.h>
-#include <osmocom/bsc/mgw_endpoint_fsm.h>
 #include <osmocom/bsc/bsc_subscr_conn_fsm.h>
 #include <osmocom/bsc/handover.h>
 #include <osmocom/bsc/abis_rsl.h>
@@ -386,7 +387,7 @@ static void lchan_reset(struct gsm_lchan *lchan)
 	if (lchan->fi_rtp)
 		osmo_fsm_inst_term(lchan->fi_rtp, OSMO_FSM_TERM_REQUEST, 0);
 	if (lchan->mgw_endpoint_ci_bts) {
-		mgw_endpoint_ci_dlcx(lchan->mgw_endpoint_ci_bts);
+		osmo_mgcpc_ep_ci_dlcx(lchan->mgw_endpoint_ci_bts);
 		lchan->mgw_endpoint_ci_bts = NULL;
 	}
 
@@ -506,7 +507,7 @@ static void lchan_fsm_wait_ts_ready_onenter(struct osmo_fsm_inst *fi, uint32_t p
 	struct gsm_lchan *lchan = lchan_fi_lchan(fi);
 	struct gsm48_multi_rate_conf mr_conf;
 	struct gsm_bts *bts = lchan->ts->trx->bts;
-	struct mgwep_ci *use_mgwep_ci;
+	struct osmo_mgcpc_ep_ci *use_ci;
 	struct gsm_lchan *old_lchan = lchan->activate.info.re_use_mgw_endpoint_from_lchan;
 	struct lchan_activate_info *info = &lchan->activate.info;
 
@@ -567,14 +568,14 @@ static void lchan_fsm_wait_ts_ready_onenter(struct osmo_fsm_inst *fi, uint32_t p
 		return;
 	}
 
-	use_mgwep_ci = lchan_use_mgw_endpoint_ci_bts(lchan);
+	use_ci = lchan_use_mgw_endpoint_ci_bts(lchan);
 
 	LOG_LCHAN(lchan, LOGL_INFO,
 		  "Activation requested: %s voice=%s MGW-ci=%s type=%s tch-mode=%s\n",
 		  lchan_activate_mode_name(lchan->activate.info.activ_for),
 		  lchan->activate.info.requires_voice_stream ? "yes" : "no",
 		  lchan->activate.info.requires_voice_stream ?
-			(use_mgwep_ci ? mgwep_ci_name(use_mgwep_ci) : "new")
+			(use_ci ? osmo_mgcpc_ep_ci_name(use_ci) : "new")
 			: "none",
 		  gsm_lchant_name(lchan->type),
 		  gsm48_chan_mode_name(lchan->tch_mode));
