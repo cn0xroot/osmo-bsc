@@ -48,7 +48,7 @@ static struct osmo_tdef gsm_network_T_defs[] = {
 		.desc="Periodic Location Update timer, sent to MS (1 = 6 minutes)" },
 	{ .T=993210, .default_val=20, .desc="After L3 Complete, wait for MSC to confirm" },
 	{ .T=999, .default_val=60, .desc="After Clear Request, wait for MSC to Clear Command (sanity)" },
-	{ .T=23042, .default_val=4, .desc="Timeout for MGCP response from the MGW" },
+	{ .T=-2427001, .default_val=4, .desc="Timeout for MGCP response from the MGW" },
 	{}
 };
 
