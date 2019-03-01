@@ -92,8 +92,12 @@ struct bsc_msc_data *osmo_msc_data_alloc(struct gsm_network *net, int nr)
 	msc_data->allow_emerg = 1;
 	msc_data->a.asp_proto = OSMO_SS7_ASP_PROT_M3UA;
 
-	/* Defaults for the audio setup */
+	/* Defaults (Config-NB-Code = 1) for the audio setup, see also
+	 * 3GPP TS 28.062, Table 7.11.3.1.3-2 */
+	msc_data->amr_conf.m4_75 = 1;
 	msc_data->amr_conf.m5_90 = 1;
+	msc_data->amr_conf.m7_40 = 1;
+	msc_data->amr_conf.m12_2 = 1;
 
 	/* Allow the full set of possible codecs by default */
 	msc_data->audio_length = 5;
