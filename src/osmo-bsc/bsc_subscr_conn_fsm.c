@@ -460,11 +460,13 @@ static bool same_mgw_info(const struct mgcp_conn_peer *a, const struct mgcp_conn
 struct osmo_mgcpc_ep *gscon_ensure_mgw_endpoint(struct gsm_subscriber_connection *conn,
 						uint16_t msc_assigned_cic)
 {
+	const char* name;
 	if (conn->user_plane.mgw_endpoint)
 		return conn->user_plane.mgw_endpoint;
 
 	if (gscon_is_sccplite(conn)) {
 		/* derive endpoint name from CIC on A interface side */
+		/* TODO: implement osmux for SCCPlite */
 		conn->user_plane.mgw_endpoint =
 			osmo_mgcpc_ep_alloc(conn->fi, GSCON_EV_FORGET_MGW_ENDPOINT,
 					    conn->network->mgw.client,
@@ -477,12 +479,16 @@ struct osmo_mgcpc_ep *gscon_ensure_mgw_endpoint(struct gsm_subscriber_connection
 
 	} else if (gscon_is_aoip(conn)) {
 		/* use dynamic RTPBRIDGE endpoint allocation in MGW */
+		//if (conn->assignment.req.use_osmux)
+		//	name = mgcp_client_osmuxbridge_wildcard(conn->network->mgw.client);
+		//else
+			name = mgcp_client_rtpbridge_wildcard(conn->network->mgw.client);
 		conn->user_plane.mgw_endpoint =
 			osmo_mgcpc_ep_alloc(conn->fi, GSCON_EV_FORGET_MGW_ENDPOINT,
 					    conn->network->mgw.client,
 					    conn->network->mgw.tdefs,
 					    conn->fi->id,
-					    "%s", mgcp_client_rtpbridge_wildcard(conn->network->mgw.client));
+					    "%s", name);
 	} else {
 		LOGPFSML(conn->fi, LOGL_ERROR, "Conn is neither SCCPlite nor AoIP!?\n");
 		return NULL;
@@ -519,6 +525,8 @@ bool gscon_connect_mgw_to_msc(struct gsm_subscriber_connection *conn,
 		.port = port,
 		.call_id = conn->sccp.conn_id,
 		.ptime = 20,
+		.x_osmo_osmux_use = conn->assignment.req.use_osmux,
+		.x_osmo_osmux_cid = conn->assignment.req.osmux_cid,
 	};
 	mgcp_pick_codec(&mgw_info, for_lchan, false);
 
