@@ -883,6 +883,12 @@ static int bssmap_handle_assignm_req(struct gsm_subscriber_connection *conn,
 				LOGP(DMSC, LOGL_NOTICE, "MSC not using Osmux but we have Osmux enabled.\n");
 		}
 
+		/* HACK TO TEST OSMUX */
+		//static int next_osmux_cid_test = 3;
+		//use_osmux = true;
+		//osmux_cid = next_osmux_cid_test;
+		//next_osmux_cid_test++;
+
 		/* Decode speech codec list. First set len = 0. */
 		conn->codec_list = (struct gsm0808_speech_codec_list){};
 		/* Check for speech codec list element */
